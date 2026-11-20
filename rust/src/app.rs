@@ -5,6 +5,7 @@
 use crate::core::constants;
 use crate::core::models::{Session, SessionTab};
 use crate::core::services::{BookmarkManager, DownloadManager, HistoryManager, SettingsManager};
+use crate::core::updater::{self, UpdateInfo};
 use crate::engine::{self, WebConfig};
 use crate::ipc::{ChromeMsg, ExtensionChange, UserEvent};
 use crate::ui;
@@ -61,10 +62,16 @@ pub struct App {
     dl_text: String,
     progress_visible: bool,
     progress_value: f64,
-    window_size: (f64, f64),
+    /// Fiziksel pencere boyutu (device pixels) ve olcek carpani.
+    win_phys: (f64, f64),
+    scale: f64,
     fullscreen: bool,
     quitting: bool,
     last_find: String,
+    debug: bool,
+    calibrated: bool,
+    last_state: String,
+    update: Option<UpdateInfo>,
 }
 
 impl App {
@@ -72,14 +79,29 @@ impl App {
     pub fn new(window: Window, proxy: EventLoopProxy<UserEvent>) -> Self {
         let mut context = WebContext::new(Some(constants::data_dir().join("webview")));
         let size = window.inner_size();
-        let scale = window.scale_factor();
-        let window_size = (size.width as f64 / scale, size.height as f64 / scale);
+        let win_phys = (size.width as f64, size.height as f64);
+        if std::env::var("SWIFTX_DEBUG").is_ok() {
+            eprintln!(
+                "[SwiftX scale] inner_size={}x{} window_scale={}",
+                size.width,
+                size.height,
+                window.scale_factor()
+            );
+        }
 
-        let chrome = WebViewBuilder::new_with_web_context(&mut context)
+        let selftest = std::env::var("SWIFTX_SELFTEST").is_ok();
+        let debug = std::env::var("SWIFTX_DEBUG").is_ok();
+
+        let mut chrome_builder = WebViewBuilder::new_with_web_context(&mut context)
             .with_html(ui::CHROME_HTML)
-            .with_bounds(engine::rect(0.0, 0.0, window_size.0, window_size.1))
+            .with_bounds(engine::rect(0.0, 0.0, win_phys.0, win_phys.1))
             .with_background_color((28, 27, 34, 255))
-            .with_initialization_script(crate::engine::scripts::HOTKEYS_JS)
+            .with_initialization_script(crate::engine::scripts::HOTKEYS_JS);
+        if selftest {
+            chrome_builder =
+                chrome_builder.with_initialization_script(crate::engine::scripts::SELFTEST_JS);
+        }
+        let chrome = chrome_builder
             .with_ipc_handler({
                 let proxy = proxy.clone();
                 move |req: wry::http::Request<String>| {
@@ -90,6 +112,18 @@ impl App {
             })
             .build_as_child(&window)
             .expect("chrome arayuzu olusturulamadi");
+
+        // wry, set_bounds sirasinda boyutlari webview'in kendi olcek carpaniyla
+        // "logical" birime cevirir. Bu yuzden yerlesim hesaplarinda tao penceresinin
+        // degil, web gorunumunun olcek carpanini kullanmaliyiz.
+        let scale = webview_scale(&chrome, &window);
+        if std::env::var("SWIFTX_DEBUG").is_ok() {
+            eprintln!(
+                "[SwiftX scale] webview_scale={scale} css_viewport={}x{}",
+                win_phys.0 / scale,
+                win_phys.1 / scale
+            );
+        }
 
         let settings = SettingsManager::load();
         let blocker = Arc::new(AtomicBool::new(settings.settings().ad_blocker_enabled));
@@ -113,14 +147,19 @@ impl App {
             dl_text: String::new(),
             progress_visible: false,
             progress_value: 0.0,
-            window_size,
+            win_phys,
+            scale,
             fullscreen: false,
             quitting: false,
             last_find: String::new(),
+            calibrated: false,
+            last_state: String::new(),
+            update: None,
+            debug,
         };
 
         // Uyutma zamanlayicisi (30 sn).
-        let tick_proxy = proxy;
+        let tick_proxy = proxy.clone();
         std::thread::spawn(move || loop {
             std::thread::sleep(Duration::from_secs(30));
             if tick_proxy.send_event(UserEvent::HibernateTick).is_err() {
@@ -128,9 +167,54 @@ impl App {
             }
         });
 
+        // Acilista guncelleme kontrolu (arka planda, sessiz).
+        let update_proxy = proxy;
+        std::thread::spawn(move || match updater::check() {
+            Ok(Some(info)) => {
+                let _ = update_proxy.send_event(UserEvent::UpdateAvailable(Box::new(info)));
+            }
+            Ok(None) => {}
+            Err(_) => {}
+        });
+
         app.load_session_or_home();
         app.send_state();
         app
+    }
+
+    /// Guncellemeyi arka planda kontrol eder ve sonucu bildirir.
+    fn check_updates_async(&self) {
+        let proxy = self.proxy.clone();
+        std::thread::spawn(move || match updater::check() {
+            Ok(Some(info)) => {
+                let _ = proxy.send_event(UserEvent::UpdateAvailable(Box::new(info)));
+            }
+            Ok(None) => {
+                let _ = proxy.send_event(UserEvent::UpdateNone);
+            }
+            Err(e) => {
+                let _ = proxy.send_event(UserEvent::UpdateError(e));
+            }
+        });
+    }
+
+    /// Bulunan guncellemeyi indirir, uygular ve cikar.
+    fn install_update(&mut self) {
+        let Some(info) = self.update.clone() else {
+            self.notify("Guncelleme bulunamadi.".to_string());
+            return;
+        };
+        self.notify(format!("⬇ Guncelleme indiriliyor: v{}", info.version));
+        self.send_state();
+        let proxy = self.proxy.clone();
+        std::thread::spawn(move || match updater::download_and_apply(&info) {
+            Ok(()) => {
+                let _ = proxy.send_event(UserEvent::UpdateReady);
+            }
+            Err(e) => {
+                let _ = proxy.send_event(UserEvent::UpdateError(e));
+            }
+        });
     }
 
     fn config(&self) -> WebConfig {
@@ -146,29 +230,37 @@ impl App {
     }
 
     fn content_bounds(&self) -> wry::Rect {
-        let (w, h) = self.window_size;
-        let right = if self.panel.is_some() {
-            ui::PANEL_W
+        let (w, h) = self.win_phys;
+        let s = self.scale;
+        let top = ui::TOPBAR_H * s;
+        let left = if self.sidebar_open {
+            constants::SIDEBAR_W as f64 * s
         } else {
             0.0
         };
-        let bottom = if self.dl_visible { ui::DLBAR_H } else { 0.0 };
+        let right = if self.panel.is_some() {
+            ui::PANEL_W * s
+        } else {
+            0.0
+        };
+        let bottom = if self.dl_visible {
+            ui::DLBAR_H * s
+        } else {
+            0.0
+        };
         engine::rect(
-            0.0,
-            ui::TOPBAR_H,
-            (w - right).max(1.0),
-            (h - ui::TOPBAR_H - bottom).max(1.0),
+            left,
+            top,
+            (w - left - right).max(1.0),
+            (h - top - bottom).max(1.0),
         )
     }
 
     /// Yerlesimi gunceller (pencere boyutu / panel / cubuk degisimlerinde).
     pub fn layout(&self) {
-        let _ = self.chrome.set_bounds(engine::rect(
-            0.0,
-            0.0,
-            self.window_size.0,
-            self.window_size.1,
-        ));
+        let _ = self
+            .chrome
+            .set_bounds(engine::rect(0.0, 0.0, self.win_phys.0, self.win_phys.1));
         let bounds = self.content_bounds();
         for (i, tab) in self.tabs.iter().enumerate() {
             let _ = tab.webview.set_bounds(bounds);
@@ -190,35 +282,48 @@ impl App {
                     } else {
                         st.url.clone()
                     };
-                    self.new_tab_at(Some(url), false);
+                    // Geri yuklenen sekmeler tembel baslatilir: yalnizca aktif
+                    // sekme gercek sayfayi yukler, digerleri uyutulmus baslar.
+                    self.new_tab_at(Some(url), false, true);
                 }
                 let active = session.active.min(self.tabs.len().saturating_sub(1));
                 self.switch_tab(active);
                 return;
             }
         }
-        self.new_tab_at(None, false);
+        self.new_tab_at(None, false, false);
     }
 
-    fn new_tab_at(&mut self, url: Option<String>, switch: bool) {
+    fn new_tab_at(&mut self, url: Option<String>, switch: bool, lazy: bool) {
         let id = self.next_id;
         self.next_id += 1;
         let url = url.unwrap_or_else(engine::home_url);
         let cfg = self.config();
         let bounds = self.content_bounds();
+        let build_url = if lazy {
+            "about:blank".to_string()
+        } else {
+            url.clone()
+        };
+        let t0 = Instant::now();
         match engine::build_tab(
             &self.window,
             &mut self.context,
             &cfg,
             id,
-            &url,
+            &build_url,
             bounds,
             self.proxy.clone(),
             self.blocker.clone(),
         ) {
             Ok(webview) => {
                 let _ = webview.set_visible(false);
-                let title = if url.starts_with("file://") {
+                if lazy {
+                    let _ = webview.load_html(crate::engine::scripts::HIBERNATE_HTML);
+                }
+                let title = if lazy {
+                    "Yeni Sekme".to_string()
+                } else if url.starts_with("file://") {
                     "Ana Sayfa".to_string()
                 } else {
                     "Yeni Sekme".to_string()
@@ -229,13 +334,20 @@ impl App {
                     title,
                     url: url.clone(),
                     saved_url: url,
-                    hibernated: false,
+                    hibernated: lazy,
                     color: String::new(),
                     last_active: Instant::now(),
                     zoom: 1.0,
                 });
                 if switch || self.tabs.len() == 1 {
                     self.switch_tab(self.tabs.len() - 1);
+                }
+                if self.debug {
+                    eprintln!(
+                        "[SwiftX timing] sekme{} webview olusturma: {:?}",
+                        id,
+                        t0.elapsed()
+                    );
                 }
             }
             Err(e) => self.notify(format!("Sekme acilamadi: {e}")),
@@ -268,7 +380,7 @@ impl App {
         drop(tab.webview);
         if self.tabs.is_empty() {
             self.active = 0;
-            self.new_tab_at(None, true);
+            self.new_tab_at(None, true, false);
             return;
         }
         if index < self.active {
@@ -540,19 +652,23 @@ impl App {
     /// Pencere yeniden boyutlandirildi.
     pub fn resized(&mut self) {
         let size = self.window.inner_size();
-        let scale = self.window.scale_factor();
-        self.window_size = (size.width as f64 / scale, size.height as f64 / scale);
+        self.win_phys = (size.width as f64, size.height as f64);
+        // Olcek carpani baslangicta kalibre edilir; yeniden boyutlandirmada
+        // yeniden olcmeye gerek yoktur.
         self.layout();
         self.send_state();
     }
 
     /// Chrome arayuzune guncel durumu iter.
-    pub fn send_state(&self) {
+    pub fn send_state(&mut self) {
         let state = self.build_state();
-        let js = format!(
-            "window.swiftx && window.swiftx.setState({});",
-            serde_json::to_string(&state).unwrap_or_else(|_| "{}".to_string())
-        );
+        let json = serde_json::to_string(&state).unwrap_or_else(|_| "{}".to_string());
+        // Durum degismediyse chrome'a yeniden gonderp gereksiz DOM yenilemeyi onle.
+        if json == self.last_state {
+            return;
+        }
+        self.last_state = json.clone();
+        let js = format!("window.swiftx && window.swiftx.setState({json});");
         let _ = self.chrome.evaluate_script(&js);
     }
 
@@ -651,6 +767,10 @@ impl App {
             "progress": { "visible": self.progress_visible, "value": self.progress_value },
             "dlbar": { "visible": self.dl_visible, "text": self.dl_text },
             "version": constants::VERSION,
+            "update": {
+                "available": self.update.is_some(),
+                "version": self.update.as_ref().map(|u| u.version.clone()).unwrap_or_default(),
+            },
         })
     }
 
@@ -690,6 +810,9 @@ impl App {
                     if !t.hibernated {
                         let (title, url) = (t.title.clone(), t.url.clone());
                         self.history.add(&title, &url);
+                        if self.debug {
+                            eprintln!("[SwiftX timing] yuklendi tab={tab} url={url}");
+                        }
                     }
                 }
                 let proxy = self.proxy.clone();
@@ -729,7 +852,7 @@ impl App {
                 });
             }
             UserEvent::NewWindow { url, .. } => {
-                self.new_tab_at(Some(url), true);
+                self.new_tab_at(Some(url), true, false);
             }
             UserEvent::Permission { kind } => {
                 self.notify(format!("✓ {} izni verildi", permission_str(kind)));
@@ -743,6 +866,22 @@ impl App {
                 self.check_hibernation();
             }
             UserEvent::Resized => self.resized(),
+            UserEvent::ChromeMetrics { css_w, css_h } => {
+                if css_w > 1.0 {
+                    let new_scale = self.win_phys.0 / css_w;
+                    if (new_scale - self.scale).abs() > 0.001 {
+                        if self.debug {
+                            eprintln!(
+                                "[SwiftX scale] kalibre edildi: css={}x{} scale={}",
+                                css_w, css_h, new_scale
+                            );
+                        }
+                        self.scale = new_scale;
+                    }
+                }
+                self.calibrated = true;
+                self.layout();
+            }
             UserEvent::HideDownloadBar => {
                 self.dl_visible = false;
                 self.layout();
@@ -753,14 +892,54 @@ impl App {
             }
             UserEvent::Status(text) => self.notify(text),
             UserEvent::RefreshState => {}
+            UserEvent::UpdateAvailable(info) => {
+                let version = info.version.clone();
+                self.update = Some(*info);
+                self.notify(format!("⬆ Yeni surum mevcut: v{version}"));
+            }
+            UserEvent::UpdateNone => {
+                self.notify("Guncelleme yok; en son surumdesiniz.".to_string());
+            }
+            UserEvent::UpdateError(e) => {
+                self.notify(format!("Guncelleme hatasi: {e}"));
+            }
+            UserEvent::UpdateReady => {
+                self.save_session();
+                self.send_state();
+                std::process::exit(0);
+            }
         }
         self.send_state();
     }
 
     fn handle_chrome(&mut self, msg: ChromeMsg) {
+        if self.debug {
+            eprintln!("[SwiftX debug] chrome msg: {msg:?}");
+        }
         match msg {
-            ChromeMsg::Ready => {}
-            ChromeMsg::NewTab { url } => self.new_tab_at(url, true),
+            ChromeMsg::Ready => {
+                if self.debug {
+                    eprintln!("[SwiftX debug] chrome ready");
+                }
+                if !self.calibrated {
+                    let proxy = self.proxy.clone();
+                    let _ = self.chrome.evaluate_script_with_callback(
+                        "JSON.stringify([window.innerWidth, window.innerHeight])",
+                        move |res| {
+                            let trimmed = res.trim_matches('"');
+                            if let Ok(v) = serde_json::from_str::<Vec<f64>>(trimmed) {
+                                if v.len() == 2 && v[0] > 1.0 {
+                                    let _ = proxy.send_event(UserEvent::ChromeMetrics {
+                                        css_w: v[0],
+                                        css_h: v[1],
+                                    });
+                                }
+                            }
+                        },
+                    );
+                }
+            }
+            ChromeMsg::NewTab { url } => self.new_tab_at(url, true, false),
             ChromeMsg::CloseTab { index } => self.close_tab(index),
             ChromeMsg::CloseCurrent => self.close_tab(self.active),
             ChromeMsg::SwitchTab { index } => self.switch_tab(index),
@@ -771,6 +950,7 @@ impl App {
             ChromeMsg::Home => self.go_home(),
             ChromeMsg::ToggleSidebar => {
                 self.sidebar_open = !self.sidebar_open;
+                self.layout();
             }
             ChromeMsg::FocusUrl => {
                 let _ = self.chrome.focus();
@@ -823,6 +1003,19 @@ impl App {
             ChromeMsg::ToggleDevtools => self.toggle_devtools(),
             ChromeMsg::ExportBookmarks => self.export_bookmarks(),
             ChromeMsg::ImportBookmarks => self.import_bookmarks(),
+            ChromeMsg::SelfTest { data } => {
+                eprintln!("[SwiftX selftest] {data}");
+            }
+            ChromeMsg::Probe { data } => {
+                eprintln!("[SwiftX probe] {data}");
+            }
+            ChromeMsg::CheckUpdates => self.check_updates_async(),
+            ChromeMsg::InstallUpdate => self.install_update(),
+            ChromeMsg::OpenReleasePage => {
+                if let Some(u) = self.update.clone() {
+                    self.new_tab_at(Some(u.page_url), true, false);
+                }
+            }
             ChromeMsg::ToggleFullscreen => self.toggle_fullscreen(),
         }
     }
@@ -916,4 +1109,40 @@ pub fn normalize_url(text: &str) -> String {
     }
     let query = t.replace(' ', "+");
     format!("https://www.google.com/search?q={query}")
+}
+
+/// Web gorunumunun gercek olcek carpanini dondurur.
+///
+/// Linux/WebKitGTK'da bu deger tao penceresinin scale_factor'undan farkli
+/// olabildigi icin yerlesim hesaplarinda bunu kullanmak gerekir.
+fn webview_scale(webview: &WebView, window: &Window) -> f64 {
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd",
+    ))]
+    {
+        use gtk::prelude::WidgetExt;
+        use wry::WebViewExtUnix;
+        let _ = window;
+        let s = webview.webview().scale_factor() as f64;
+        if s > 0.0 {
+            s
+        } else {
+            1.0
+        }
+    }
+    #[cfg(not(any(
+        target_os = "linux",
+        target_os = "dragonfly",
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd",
+    )))]
+    {
+        let _ = webview;
+        window.scale_factor()
+    }
 }

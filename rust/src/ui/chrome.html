@@ -122,6 +122,19 @@
   #ctx button:hover { background: #5b5bef; }
   #ctx .sep { height: 1px; background: #45445a; margin: 4px 0; }
 
+  /* ── Sol kenar cubugu ── */
+  #sidebar {
+    position: fixed; top: 114px; left: 0; bottom: 0; width: 48px; background: #17161d;
+    border-right: 1px solid #2a2930; display: none; flex-direction: column; align-items: center;
+    gap: 6px; padding-top: 10px; z-index: 40;
+  }
+  #sidebar.open { display: flex; }
+  #sidebar button {
+    width: 36px; height: 36px; border: none; border-radius: 8px; background: transparent;
+    color: #cfcfe0; font-size: 16px;
+  }
+  #sidebar button:hover { background: #2a2930; color: #fbfbfe; }
+
   /* ── Bul cubugu ── */
   #findbar {
     position: fixed; top: 84px; right: 16px; display: none; align-items: center; gap: 4px;
@@ -139,7 +152,6 @@
   <div id="tabstrip">
     <button id="toggleBtn" title="Kenar Cubugu (Ctrl+B)">☰</button>
     <div id="tabScroll"></div>
-    <button id="newTabBtn" title="Yeni Sekme (Ctrl+T)">+</button>
   </div>
 
   <div id="nav">
@@ -154,6 +166,13 @@
 
   <div id="bookmarks"></div>
   <div id="progress"><div id="progressBar"></div></div>
+
+  <div id="sidebar">
+    <button id="sideHome" title="Ana Sayfa">⌂</button>
+    <button id="sideSearch" title="Ara">⌕</button>
+    <button id="sideExt" title="Eklentiler">🧩</button>
+    <button id="sideSettings" title="Ayarlar">⚙</button>
+  </div>
 
   <div id="panel">
     <div id="panelHead">
@@ -208,6 +227,13 @@ function renderTabs() {
     item.addEventListener("auxclick", (e) => { if (e.button === 1) send({ cmd: "close_tab", index: i }); });
     wrap.appendChild(item);
   });
+  const newTab = document.createElement("button");
+  newTab.id = "newTabBtn";
+  newTab.textContent = "+";
+  newTab.title = "Yeni Sekme (Ctrl+T)";
+  newTab.onclick = () => send({ cmd: "new_tab" });
+  wrap.appendChild(newTab);
+  requestAnimationFrame(() => { wrap.scrollLeft = wrap.scrollWidth; });
 }
 
 /* ── Yer imleri ── */
@@ -284,6 +310,35 @@ function renderPanel() {
     imp.className = "bmAction"; imp.textContent = "⬇  Yer imlerini içe aktar";
     imp.onclick = () => send({ cmd: "import_bookmarks" });
     body.appendChild(imp);
+
+    const upd = STATE.update || {};
+    const updHead = document.createElement("div");
+    updHead.style.cssText = "margin-top:14px;color:#9e9db5;font-size:11px;";
+    updHead.textContent = "Güncellemeler";
+    body.appendChild(updHead);
+    if (upd.available) {
+      const banner = document.createElement("div");
+      banner.style.cssText = "background:#232230;border:1px solid #5b5bef;border-radius:6px;padding:10px;margin-top:6px;font-size:12px;";
+      banner.textContent = "⬆ Yeni sürüm hazır: v" + esc(upd.version);
+      body.appendChild(banner);
+      const bInstall = document.createElement("button");
+      bInstall.className = "bmAction";
+      bInstall.style.background = "#5b5bef";
+      bInstall.textContent = "Yeniden başlat ve güncelle";
+      bInstall.onclick = () => send({ cmd: "install_update" });
+      body.appendChild(bInstall);
+      const bPage = document.createElement("button");
+      bPage.className = "bmAction";
+      bPage.textContent = "Sürüm notlarını aç";
+      bPage.onclick = () => send({ cmd: "open_release_page" });
+      body.appendChild(bPage);
+    } else {
+      const bCheck = document.createElement("button");
+      bCheck.className = "bmAction";
+      bCheck.textContent = "Güncellemeleri kontrol et";
+      bCheck.onclick = () => send({ cmd: "check_updates" });
+      body.appendChild(bCheck);
+    }
   } else if (p.kind === "extensions") {
     const title = document.createElement("div");
     title.style.padding = "6px 4px 10px";
@@ -314,6 +369,8 @@ function renderPanel() {
 function renderBars() {
   if (!urlFocused) el("urlBar").value = STATE.url || "";
   el("toggleBtn").textContent = STATE.sidebar_open ? "☰" : "▶";
+  el("sidebar").classList.toggle("open", !!STATE.sidebar_open);
+  el("dlbar").style.left = STATE.sidebar_open ? "48px" : "0";
   const pr = STATE.progress || {};
   el("progressBar").style.width = pr.visible ? (pr.value || 0) + "%" : "0%";
   const d = STATE.dlbar || {};
@@ -350,8 +407,11 @@ function closeCtx() { el("ctx").classList.remove("open"); }
 document.addEventListener("click", (e) => { if (!el("ctx").contains(e.target)) closeCtx(); });
 
 /* ── Olay baglantilari ── */
-el("newTabBtn").onclick = () => send({ cmd: "new_tab" });
 el("toggleBtn").onclick = () => send({ cmd: "toggle_sidebar" });
+el("sideHome").onclick = () => send({ cmd: "home" });
+el("sideSearch").onclick = () => send({ cmd: "focus_url" });
+el("sideExt").onclick = () => send({ cmd: "open_extensions" });
+el("sideSettings").onclick = () => send({ cmd: "toggle_settings" });
 el("backBtn").onclick = () => send({ cmd: "back" });
 el("fwdBtn").onclick = () => send({ cmd: "forward" });
 el("reloadBtn").onclick = () => send({ cmd: "reload" });
@@ -381,6 +441,7 @@ el("findInput").addEventListener("keydown", (e) => {
 window.swiftx = {
   setState(json) {
     try { STATE = typeof json === "string" ? JSON.parse(json) : json; } catch (e) { return; }
+    window.swiftx._state = STATE;
     render();
   },
   focusUrl() { el("urlBar").focus(); },

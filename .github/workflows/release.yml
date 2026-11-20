@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -19,8 +21,10 @@ jobs:
         include:
           - os: ubuntu-22.04
             artifact: swiftx-linux-x86_64
+            raw: swiftx
           - os: windows-latest
             artifact: swiftx-windows-x86_64
+            raw: swiftx.exe
     steps:
       - uses: actions/checkout@v4
 
@@ -53,6 +57,7 @@ jobs:
           cp rust/target/release/swiftx dist/swiftx/
           cp -r rust/resources dist/swiftx/resources
           tar -C dist -czf "${{ matrix.artifact }}.tar.gz" swiftx
+          cp rust/target/release/swiftx "${{ matrix.raw }}"
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
@@ -62,22 +67,25 @@ jobs:
           Copy-Item rust/target/release/swiftx.exe dist/swiftx/
           Copy-Item -Recurse rust/resources dist/swiftx/resources
           Compress-Archive -Path dist/swiftx -DestinationPath "${{ matrix.artifact }}.zip"
+          Copy-Item rust/target/release/swiftx.exe "${{ matrix.raw }}"
 
-      - name: Upload artifact
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: |
             ${{ matrix.artifact }}.tar.gz
             ${{ matrix.artifact }}.zip
+            ${{ matrix.raw }}
           if-no-files-found: warn
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: |
             ${{ matrix.artifact }}.tar.gz
             ${{ matrix.artifact }}.zip
+            ${{ matrix.raw }}
           generate_release_notes: true
           fail_on_unmatched_files: false

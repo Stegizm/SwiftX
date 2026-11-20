@@ -4,6 +4,8 @@ use serde::Deserialize;
 use std::path::PathBuf;
 use wry::PermissionKind;
 
+use crate::core::updater::UpdateInfo;
+
 /// Chrome arayuzunden gelen komutlar.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "cmd", rename_all = "snake_case")]
@@ -94,6 +96,16 @@ pub enum ChromeMsg {
     ExportBookmarks,
     /// Yer imlerini ice aktar.
     ImportBookmarks,
+    /// Dahili self-test sonucu (yalnizca gelistirme).
+    SelfTest { data: String },
+    /// Icerik web gorunumunden gelen teshis bilgisi (yalnizca gelistirme).
+    Probe { data: String },
+    /// Guncellemeleri kontrol et.
+    CheckUpdates,
+    /// Bulunan guncellemeyi indir ve kur.
+    InstallUpdate,
+    /// Surum sayfasini tarayicida ac.
+    OpenReleasePage,
 }
 
 /// Eklenti degisikligi.
@@ -134,6 +146,8 @@ pub enum UserEvent {
     HibernateTick,
     /// Pencere yeniden boyutlandirildi.
     Resized,
+    /// Chrome arayuzunun olculen CSS gorunum boyutu (olcek kalibrasyonu).
+    ChromeMetrics { css_w: f64, css_h: f64 },
     /// Indirme cubugunu gizle (zamanli).
     HideDownloadBar,
     /// Ilerleme cubugunu gizle (zamanli).
@@ -142,4 +156,12 @@ pub enum UserEvent {
     Status(String),
     /// Tema/ayar durumunu chrome'a yeniden gonder.
     RefreshState,
+    /// Yeni surum bulundu.
+    UpdateAvailable(Box<UpdateInfo>),
+    /// Guncelleme yok / kontrol tamam.
+    UpdateNone,
+    /// Guncelleme sirasinda hata.
+    UpdateError(String),
+    /// Guncelleme indirildi, uygulama yeniden baslatilacak.
+    UpdateReady,
 }

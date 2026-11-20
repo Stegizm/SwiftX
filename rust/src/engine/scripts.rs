@@ -219,3 +219,92 @@ pub const FIND_JS: &str = r#"
   };
 })();
 "#;
+
+/// Dahili self-test: chrome arayuzunu JS ile surer ve sonuclari Rust'a bildirir.
+///
+/// Yalnizca `SWIFTX_SELFTEST=1` iken enjekte edilir.
+pub const SELFTEST_JS: &str = r#"
+(function () {
+  if (window.__swiftx_selftest) return;
+  window.__swiftx_selftest = true;
+  var results = [];
+  function report(name, ok, extra) {
+    results.push(name + '=' + (ok ? 'PASS' : 'FAIL') + (extra ? ' (' + extra + ')' : ''));
+  }
+  function post() {
+    try { window.ipc.postMessage(JSON.stringify({ cmd: 'self_test', data: results.join(' | ') })); } catch (e) {}
+  }
+  function send(o) { try { window.ipc.postMessage(JSON.stringify(o)); } catch (e) {} }
+  function st() { return (window.swiftx && window.swiftx._state) || {}; }
+  var steps = [];
+  function run() { if (steps.length) setTimeout(steps.shift(), 50); else post(); }
+  function step(fn) { steps.push(fn); }
+
+  step(function () { report('ipc_ready', !!window.swiftx, 'swiftx=' + !!window.swiftx); run(); });
+  step(function () {
+    var before = (st().tabs || []).length;
+    var b = document.getElementById('newTabBtn');
+    if (b) b.click(); else send({ cmd: 'new_tab' });
+    setTimeout(function () {
+      var after = (st().tabs || []).length;
+      report('new_tab', after > before, before + '->' + after);
+      run();
+    }, 900);
+  });
+  step(function () {
+    var tabCount = (st().tabs || []).length;
+    send({ cmd: 'switch_tab', index: 0 });
+    setTimeout(function () { report('switch_tab', (st().tabs || []).length === tabCount, 'tabs=' + tabCount); run(); }, 400);
+  });
+  step(function () {
+    var u = document.getElementById('urlBar');
+    u.value = 'example.com';
+    u.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    setTimeout(function () { report('navigate_sent', true, 'url=' + (st().url || '')); run(); }, 1500);
+  });
+  step(function () {
+    document.getElementById('histBtn').click();
+    setTimeout(function () {
+      var p = st().panel || {};
+      report('panel_history', !!p.open && p.kind === 'history', 'kind=' + p.kind);
+      run();
+    }, 400);
+  });
+  step(function () {
+    var before = !!st().settings && !!st().settings.dark_mode;
+    send({ cmd: 'toggle_setting', name: 'dark_mode' });
+    setTimeout(function () {
+      var after = !!st().settings && !!st().settings.dark_mode;
+      report('toggle_setting', before !== after, before + '->' + after);
+      send({ cmd: 'toggle_setting', name: 'dark_mode' });
+      run();
+    }, 400);
+  });
+  step(function () { send({ cmd: 'add_bookmark' }); setTimeout(function () { report('add_bookmark_sent', true); run(); }, 500); });
+  step(function () { report('summary', true, 'bitti'); post(); });
+
+  setTimeout(run, 1500);
+})();
+"#;
+
+/// Icerik web gorunumunun yuklendigini ve boyutunu bildiren teshis scripti.
+pub const CONTENT_PROBE_JS: &str = r#"
+(function () {
+  if (window.__swiftx_probe) return;
+  window.__swiftx_probe = true;
+  function report() {
+    try {
+      window.ipc.postMessage(JSON.stringify({ cmd: 'probe', data: JSON.stringify({
+        t: Date.now() % 100000,
+        w: window.innerWidth,
+        h: window.innerHeight,
+        title: document.title || '',
+        len: (document.body ? document.body.innerText.length : -1)
+      }) }));
+    } catch (e) {}
+  }
+  function schedule() { report(); setTimeout(report, 2000); setTimeout(report, 4500); }
+  if (document.readyState === 'complete') { setTimeout(schedule, 400); }
+  else { window.addEventListener('load', function () { setTimeout(schedule, 400); }); }
+})();
+"#;

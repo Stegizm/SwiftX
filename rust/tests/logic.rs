@@ -1,6 +1,7 @@
 //! Saf mantik fonksiyonlarinin (URL normalizasyonu, reklam engelleme) testleri.
 
 use swiftx::app::normalize_url;
+use swiftx::core::updater::is_newer;
 use swiftx::engine::ad_blocker::should_block;
 
 #[test]
@@ -33,9 +34,26 @@ fn resources_exist() {
 }
 
 #[test]
+fn version_comparison() {
+    assert!(is_newer("0.3.1", "0.3.0"));
+    assert!(is_newer("0.4.0", "0.3.9"));
+    assert!(is_newer("1.0.0", "0.9.9"));
+    assert!(is_newer("v0.3.10", "0.3.9"));
+    assert!(!is_newer("0.3.0", "0.3.0"));
+    assert!(!is_newer("0.2.9", "0.3.0"));
+}
+
+#[test]
 fn chrome_ui_contains_key_ids() {
     let html = swiftx::ui::CHROME_HTML;
-    for id in ["urlBar", "tabScroll", "bookmarks", "panel", "findbar", "newTabBtn"] {
+    for id in [
+        "urlBar",
+        "tabScroll",
+        "bookmarks",
+        "panel",
+        "findbar",
+        "newTabBtn",
+    ] {
         assert!(html.contains(id), "chrome.html icinde eksik: {id}");
     }
 }

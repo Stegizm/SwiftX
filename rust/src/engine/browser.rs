@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tao::event_loop::EventLoopProxy;
 use tao::window::Window;
-use wry::dpi::{LogicalPosition, LogicalSize};
+use wry::dpi::{PhysicalPosition, PhysicalSize};
 use wry::{Rect, WebContext, WebView, WebViewBuilder};
 
 /// Web gorunumu icin etkin ozellik bayraklari.
@@ -50,11 +50,19 @@ pub fn home_url() -> String {
         .unwrap_or_else(|_| "about:blank".to_string())
 }
 
-/// Mantiksal bir dikdortgen olusturur.
+/// Fiziksel (device pixel) bir dikdortgen olusturur.
+///
+/// WebKitGTK alt-web gorunumleri olcegi kendisi uyguladigi icin konum/boyutlar
+/// fiziksel piksel cinsinden verilmelidir; aksi halde HiDPI ekranlarda webview
+/// ile arayuz (chrome) hizalanmaz.
 pub fn rect(x: f64, y: f64, width: f64, height: f64) -> Rect {
     Rect {
-        position: LogicalPosition::new(x, y).into(),
-        size: LogicalSize::new(width.max(1.0), height.max(1.0)).into(),
+        position: PhysicalPosition::new(x.round() as i32, y.round() as i32).into(),
+        size: PhysicalSize::new(
+            width.max(1.0).round() as u32,
+            height.max(1.0).round() as u32,
+        )
+        .into(),
     }
 }
 
@@ -62,6 +70,9 @@ fn initialization_scripts(config: &WebConfig) -> Vec<String> {
     let mut scripts_vec = Vec::new();
     scripts_vec.push(scripts::HOTKEYS_JS.to_string());
     scripts_vec.push(scripts::FIND_JS.to_string());
+    if std::env::var("SWIFTX_DEBUG").is_ok() || std::env::var("SWIFTX_SELFTEST").is_ok() {
+        scripts_vec.push(scripts::CONTENT_PROBE_JS.to_string());
+    }
     if config.smooth_scroll {
         scripts_vec.push(scripts::SMOOTH_SCROLL_JS.to_string());
         scripts_vec.push(scripts::KEYBOARD_SCROLL_JS.to_string());
