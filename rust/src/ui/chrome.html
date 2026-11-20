@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; outline: none; }
+  html, body {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background: #1c1b22;
+    color: #fbfbfe;
+    font-family: 'SF Pro Text', 'Helvetica Neue', 'Segoe UI', sans-serif;
+    font-size: 13px;
+    user-select: none;
+  }
+  button { font-family: inherit; cursor: pointer; }
+
+  /* ── Sekme seridi ── */
+  #tabstrip {
+    display: flex; align-items: center; gap: 6px;
+    height: 36px; padding: 0 8px; background: #17161d;
+  }
+  #toggleBtn, .navbtn, .iconbtn {
+    background: transparent; color: #fbfbfe; border: none;
+    border-radius: 6px; font-size: 15px; width: 30px; height: 28px;
+  }
+  #toggleBtn:hover, .navbtn:hover, .iconbtn:hover { background: #2a2930; }
+  #tabScroll { flex: 1; display: flex; align-items: center; gap: 4px; overflow-x: auto; min-width: 0; }
+  #tabScroll::-webkit-scrollbar { height: 0; }
+  .tabItem {
+    display: flex; align-items: center; gap: 4px; height: 30px;
+    padding: 0 6px 0 10px; border-radius: 6px 6px 0 0; background: #232230;
+    border-top: 2px solid transparent; max-width: 200px; flex: 0 0 auto;
+  }
+  .tabItem.active { background: #2a2930; border-top-color: #5b5bef; }
+  .tabTitle {
+    background: transparent; border: none; color: #9e9db5;
+    max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12px;
+  }
+  .tabItem.active .tabTitle { color: #fbfbfe; }
+  .tabSleep { font-size: 10px; }
+  .tabClose { background: transparent; border: none; color: #9e9db5; font-size: 11px; }
+  .tabClose:hover { color: #e74c3c; }
+  #newTabBtn {
+    background: transparent; color: #fbfbfe; border: none;
+    width: 26px; height: 26px; border-radius: 6px; font-size: 17px;
+  }
+  #newTabBtn:hover { background: #2a2930; }
+
+  /* ── Navigasyon cubugu ── */
+  #nav { display: flex; align-items: center; gap: 6px; height: 46px; padding: 0 8px; background: #1c1b22; }
+  #urlBar {
+    flex: 1; height: 32px; border-radius: 16px; border: 1px solid #35343e;
+    background: #232230; color: #fbfbfe; padding: 0 14px; font-size: 13px;
+  }
+  #urlBar:focus { border-color: #5b5bef; }
+
+  /* ── Yer imi cubugu ── */
+  #bookmarks { display: flex; align-items: center; gap: 4px; height: 30px; padding: 0 8px; background: #1c1b22; overflow-x: auto; }
+  #bookmarks::-webkit-scrollbar { height: 0; }
+  .bmBtn {
+    background: transparent; color: #cfcfe0; border: none; border-radius: 4px;
+    max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12px; height: 22px; flex: 0 0 auto;
+  }
+  .bmBtn:hover { background: #2a2930; }
+  #bmAdd { background: #2a2930; color: #fbfbfe; border: none; border-radius: 4px; width: 22px; height: 22px; }
+
+  /* ── Ilerleme ── */
+  #progress { height: 2px; background: transparent; }
+  #progressBar { height: 100%; width: 0; background: #5b5bef; transition: width .2s; }
+
+  /* ── Sag panel ── */
+  #panel {
+    position: fixed; top: 114px; right: 0; bottom: 0; width: 300px;
+    background: #17161d; border-left: 1px solid #2a2930;
+    display: none; flex-direction: column;
+  }
+  #panel.open { display: flex; }
+  #panelHead { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid #2a2930; }
+  #panelTitle { font-weight: bold; font-size: 14px; }
+  #panelClear { background: transparent; border: 1px solid #35343e; color: #9e9db5; border-radius: 4px; padding: 4px 8px; font-size: 11px; }
+  #panelClose { background: transparent; border: none; color: #fbfbfe; font-size: 15px; }
+  #panelBody { flex: 1; overflow-y: auto; padding: 8px; }
+  .panelItem { padding: 8px; border-radius: 6px; cursor: pointer; }
+  .panelItem:hover { background: #2a2930; }
+  .panelItem .t { color: #fbfbfe; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .panelItem .m { color: #6e6d85; font-size: 10px; }
+  .settingRow, .extRow { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-radius: 6px; background: #232230; margin-bottom: 8px; }
+  .settingRow span { font-size: 13px; }
+  .toggleBtn { border: none; border-radius: 4px; padding: 5px 12px; color: #fff; font-weight: bold; font-size: 11px; }
+  .toggleBtn.on { background: #27ae60; }
+  .toggleBtn.off { background: #e74c3c; }
+  .extIcon { font-size: 20px; margin-right: 10px; }
+  .extInfo { flex: 1; }
+  .extName { font-weight: bold; font-size: 12px; }
+  .extDesc { color: #9e9db5; font-size: 10px; }
+  .about { color: #9e9db5; font-size: 11px; line-height: 1.7; padding: 12px; background: #1c1b22; border-radius: 6px; }
+  #panelSave { background: #5b5bef; color: #fff; border: none; border-radius: 4px; padding: 8px 16px; font-weight: bold; width: 100%; margin-top: 8px; }
+  #clearHistoryBtn { background: #e74c3c; color: #fff; border: none; border-radius: 4px; padding: 8px 12px; font-weight: bold; width: 100%; margin-top: 12px; }
+
+  /* ── Indirme cubugu ── */
+  #dlbar {
+    position: fixed; left: 0; right: 0; bottom: 0; height: 34px;
+    display: none; align-items: center; gap: 10px; padding: 0 14px;
+    background: #232230; border-top: 1px solid #2a2930;
+  }
+  #dlbar.visible { display: flex; }
+  #dlText { flex: 1; color: #cfcfe0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #dlClose { background: transparent; border: none; color: #fbfbfe; font-size: 14px; }
+
+  /* ── Baglam menusu ── */
+  #ctx {
+    position: fixed; display: none; background: #2a2930; border: 1px solid #45445a;
+    border-radius: 6px; padding: 4px; z-index: 100; min-width: 140px;
+  }
+  #ctx.open { display: block; }
+  #ctx button { display: block; width: 100%; text-align: left; background: transparent; border: none; color: #fbfbfe; padding: 6px 12px; border-radius: 4px; font-size: 12px; }
+  #ctx button:hover { background: #5b5bef; }
+  #ctx .sep { height: 1px; background: #45445a; margin: 4px 0; }
+
+  /* ── Bul cubugu ── */
+  #findbar {
+    position: fixed; top: 84px; right: 16px; display: none; align-items: center; gap: 4px;
+    background: #232230; border: 1px solid #35343e; border-radius: 8px; padding: 6px 8px;
+    z-index: 90; box-shadow: 0 4px 16px rgba(0,0,0,.45);
+  }
+  #findbar.open { display: flex; }
+  #findInput { width: 220px; height: 28px; border-radius: 14px; border: 1px solid #35343e; background: #1c1b22; color: #fbfbfe; padding: 0 12px; }
+  .findbtn { background: transparent; border: none; color: #fbfbfe; width: 26px; height: 26px; border-radius: 6px; font-size: 14px; }
+  .findbtn:hover { background: #35343e; }
+  .bmAction { background: #2a2930; color: #fbfbfe; border: none; border-radius: 4px; padding: 8px 12px; font-weight: bold; width: 100%; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div id="tabstrip">
+    <button id="toggleBtn" title="Kenar Cubugu (Ctrl+B)">☰</button>
+    <div id="tabScroll"></div>
+    <button id="newTabBtn" title="Yeni Sekme (Ctrl+T)">+</button>
+  </div>
+
+  <div id="nav">
+    <button class="navbtn" id="backBtn" title="Geri (Alt+Sol)">←</button>
+    <button class="navbtn" id="fwdBtn" title="Ileri (Alt+Sag)">→</button>
+    <button class="navbtn" id="reloadBtn" title="Yenile (F5)">↻</button>
+    <input id="urlBar" placeholder="Ara veya adres gir" spellcheck="false" />
+    <button class="iconbtn" id="starBtn" title="Yer Imine Ekle (Ctrl+D)">☆</button>
+    <button class="iconbtn" id="histBtn" title="Gecmis (Ctrl+H)">🕐</button>
+    <button class="iconbtn" id="dlBtn" title="Indirilenler (Ctrl+J)">↓</button>
+  </div>
+
+  <div id="bookmarks"></div>
+  <div id="progress"><div id="progressBar"></div></div>
+
+  <div id="panel">
+    <div id="panelHead">
+      <span id="panelTitle">Panel</span>
+      <div>
+        <button id="panelClear">Temizle</button>
+        <button id="panelClose">✕</button>
+      </div>
+    </div>
+    <div id="panelBody"></div>
+  </div>
+
+  <div id="dlbar">
+    <span id="dlText"></span>
+    <button id="dlClose">✕</button>
+  </div>
+
+  <div id="ctx"></div>
+
+  <div id="findbar">
+    <input id="findInput" placeholder="Sayfada ara" spellcheck="false" />
+    <button class="findbtn" id="findPrev" title="Onceki (Shift+Enter)">‹</button>
+    <button class="findbtn" id="findNext" title="Sonraki (Enter)">›</button>
+    <button class="findbtn" id="findClose" title="Kapat">✕</button>
+  </div>
+
+<script>
+const send = (o) => { try { window.ipc.postMessage(JSON.stringify(o)); } catch (e) {} };
+let STATE = { tabs: [], url: "", bookmarks: [], panel: { open: false }, settings: {}, extensions: [], progress: {}, dlbar: {}, sidebar_open: true, version: "0.3.0" };
+let extChanges = {};
+let urlFocused = false;
+
+const el = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* ── Sekmeler ── */
+function renderTabs() {
+  const wrap = el("tabScroll");
+  wrap.innerHTML = "";
+  (STATE.tabs || []).forEach((t, i) => {
+    const item = document.createElement("div");
+    item.className = "tabItem" + (t.active ? " active" : "");
+    if (t.color) item.style.borderTopColor = t.color;
+    const sleep = t.hibernated ? '💤 ' : '';
+    item.innerHTML =
+      (t.hibernated ? '<span class="tabSleep">💤</span>' : '') +
+      '<button class="tabTitle">' + esc(sleep + (t.title || "Yeni Sekme")) + "</button>" +
+      '<button class="tabClose">✕</button>';
+    item.querySelector(".tabTitle").onclick = () => send({ cmd: "switch_tab", index: i });
+    item.querySelector(".tabClose").onclick = (e) => { e.stopPropagation(); send({ cmd: "close_tab", index: i }); };
+    item.addEventListener("contextmenu", (e) => { e.preventDefault(); openCtx(e, i); });
+    item.addEventListener("auxclick", (e) => { if (e.button === 1) send({ cmd: "close_tab", index: i }); });
+    wrap.appendChild(item);
+  });
+}
+
+/* ── Yer imleri ── */
+function renderBookmarks() {
+  const wrap = el("bookmarks");
+  wrap.innerHTML = "";
+  (STATE.bookmarks || []).forEach((b) => {
+    const btn = document.createElement("button");
+    btn.className = "bmBtn";
+    btn.textContent = b.title;
+    btn.title = b.url;
+    btn.onclick = () => send({ cmd: "open_url", url: b.url });
+    btn.oncontextmenu = (e) => { e.preventDefault(); send({ cmd: "remove_bookmark", title: b.title }); };
+    wrap.appendChild(btn);
+  });
+  const add = document.createElement("button");
+  add.id = "bmAdd";
+  add.textContent = "+";
+  add.title = "Mevcut sayfayi ekle";
+  add.onclick = () => send({ cmd: "add_bookmark" });
+  wrap.appendChild(add);
+}
+
+/* ── Panel ── */
+function renderPanel() {
+  const p = STATE.panel || { open: false };
+  const panel = el("panel");
+  panel.classList.toggle("open", !!p.open);
+  if (!p.open) return;
+  el("panelTitle").textContent = p.title || "Panel";
+  const body = el("panelBody");
+  body.innerHTML = "";
+  el("panelClear").style.display = (p.kind === "history" || p.kind === "downloads") ? "" : "none";
+
+  if (p.kind === "history" || p.kind === "downloads") {
+    (p.items || []).forEach((it) => {
+      const div = document.createElement("div");
+      div.className = "panelItem";
+      div.innerHTML = '<div class="t">' + esc(it.label) + '</div><div class="m">' + esc(it.meta || "") + "</div>";
+      div.onclick = () => it.url && send({ cmd: "open_url", url: it.url });
+      body.appendChild(div);
+    });
+  } else if (p.kind === "settings") {
+    const defs = [
+      ["ad_blocker_enabled", "🚫 Reklam Bloker"],
+      ["smooth_scroll", "🎯 Smooth Scroll"],
+      ["dark_mode", "🌙 Auto Dark Mode"],
+      ["restore_session", "💾 Son Oturumu Geri Yukle"],
+      ["tab_hibernate", "💤 Sekme Uyutma"],
+    ];
+    defs.forEach(([name, label]) => {
+      const on = !!STATE.settings[name];
+      const row = document.createElement("div");
+      row.className = "settingRow";
+      row.innerHTML = "<span>" + esc(label) + '</span><button class="toggleBtn ' + (on ? "on" : "off") + '">' + (on ? "Açık" : "Kapalı") + "</button>";
+      row.querySelector("button").onclick = () => send({ cmd: "toggle_setting", name });
+      body.appendChild(row);
+    });
+    const clr = document.createElement("button");
+    clr.id = "clearHistoryBtn";
+    clr.textContent = "🗑  Tüm Geçmişi Temizle";
+    clr.onclick = () => send({ cmd: "clear_history" });
+    body.appendChild(clr);
+    const about = document.createElement("div");
+    about.className = "about";
+    about.style.marginTop = "12px";
+    about.innerHTML = "i SwiftX Browser v" + esc(STATE.version) + "<br><br>Hızlı, Güvenli ve Açık Kaynaklı Tarayıcı<br><br>✓ Reklam Engelleyici  ✓ Smooth Scroller<br>✓ Auto Dark Mode      ✓ Session Recovery<br>✓ Sekme Uyutma        ✓ Eklenti Sistemi";
+    body.appendChild(about);
+    const exp = document.createElement("button");
+    exp.className = "bmAction"; exp.textContent = "⬆  Yer imlerini dışa aktar";
+    exp.onclick = () => send({ cmd: "export_bookmarks" });
+    body.appendChild(exp);
+    const imp = document.createElement("button");
+    imp.className = "bmAction"; imp.textContent = "⬇  Yer imlerini içe aktar";
+    imp.onclick = () => send({ cmd: "import_bookmarks" });
+    body.appendChild(imp);
+  } else if (p.kind === "extensions") {
+    const title = document.createElement("div");
+    title.style.padding = "6px 4px 10px";
+    title.style.fontWeight = "bold";
+    title.textContent = "📦 SwiftX Eklenti Merkezi";
+    body.appendChild(title);
+    (STATE.extensions || []).forEach((e) => {
+      const on = extChanges.hasOwnProperty(e.id) ? extChanges[e.id] : e.enabled;
+      const row = document.createElement("div");
+      row.className = "extRow";
+      row.innerHTML = '<span class="extIcon">' + esc(e.icon) + '</span><div class="extInfo"><div class="extName">' + esc(e.name) + '</div><div class="extDesc">' + esc(e.desc) + '</div></div><button class="toggleBtn ' + (on ? "on" : "off") + '">' + (on ? "Açık" : "Kapalı") + "</button>";
+      row.querySelector("button").onclick = () => { extChanges[e.id] = !on; renderPanel(); };
+      body.appendChild(row);
+    });
+    const save = document.createElement("button");
+    save.id = "panelSave";
+    save.textContent = "💾 Değişiklikleri Kaydet";
+    save.onclick = () => {
+      const changes = Object.keys(extChanges).map((id) => ({ id, enabled: extChanges[id] }));
+      send({ cmd: "save_extensions", changes });
+      extChanges = {};
+    };
+    body.appendChild(save);
+  }
+}
+
+/* ── Digerleri ── */
+function renderBars() {
+  if (!urlFocused) el("urlBar").value = STATE.url || "";
+  el("toggleBtn").textContent = STATE.sidebar_open ? "☰" : "▶";
+  const pr = STATE.progress || {};
+  el("progressBar").style.width = pr.visible ? (pr.value || 0) + "%" : "0%";
+  const d = STATE.dlbar || {};
+  el("dlbar").classList.toggle("visible", !!d.visible);
+  el("dlText").textContent = d.text || "";
+}
+
+function render() { renderTabs(); renderBookmarks(); renderPanel(); renderBars(); }
+
+/* ── Baglam menusu ── */
+let ctxIndex = 0;
+function openCtx(e, index) {
+  ctxIndex = index;
+  const ctx = el("ctx");
+  const colors = [["none", ""], ["kirmizi", "#e74c3c"], ["turuncu", "#e67e22"], ["sari", "#f1c40f"], ["yesil", "#27ae60"], ["mavi", "#3498db"], ["mor", "#9b59b6"]];
+  ctx.innerHTML = '<button data-a="copy">⧉ Kopyala</button>' +
+    colors.map(([n, c]) => '<button data-a="color" data-c="' + n + '">● ' + n + "</button>").join("") +
+    '<div class="sep"></div>' +
+    '<button data-a="wake">💤 Uyandır</button>' +
+    '<button data-a="hibernate">💤 Uyut</button>' +
+    '<div class="sep"></div>' +
+    '<button data-a="close">✕ Kapat</button>';
+  ctx.querySelectorAll("button").forEach((b) => {
+    b.onclick = () => {
+      send({ cmd: "tab_context", index: ctxIndex, action: b.dataset.a, color: b.dataset.c || null });
+      closeCtx();
+    };
+  });
+  ctx.style.left = e.clientX + "px";
+  ctx.style.top = e.clientY + "px";
+  ctx.classList.add("open");
+}
+function closeCtx() { el("ctx").classList.remove("open"); }
+document.addEventListener("click", (e) => { if (!el("ctx").contains(e.target)) closeCtx(); });
+
+/* ── Olay baglantilari ── */
+el("newTabBtn").onclick = () => send({ cmd: "new_tab" });
+el("toggleBtn").onclick = () => send({ cmd: "toggle_sidebar" });
+el("backBtn").onclick = () => send({ cmd: "back" });
+el("fwdBtn").onclick = () => send({ cmd: "forward" });
+el("reloadBtn").onclick = () => send({ cmd: "reload" });
+el("starBtn").onclick = () => send({ cmd: "add_bookmark" });
+el("histBtn").onclick = () => send({ cmd: "toggle_history" });
+el("dlBtn").onclick = () => send({ cmd: "toggle_downloads" });
+el("panelClose").onclick = () => send({ cmd: "close_panel" });
+el("panelClear").onclick = () => send({ cmd: "clear_panel" });
+el("dlClose").onclick = () => { el("dlbar").classList.remove("visible"); };
+el("urlBar").addEventListener("focus", () => { urlFocused = true; el("urlBar").select(); });
+el("urlBar").addEventListener("blur", () => { urlFocused = false; });
+el("urlBar").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { send({ cmd: "navigate", text: el("urlBar").value }); el("urlBar").blur(); }
+  if (e.key === "Escape") el("urlBar").blur();
+});
+
+/* ── Bul cubugu ── */
+el("findNext").onclick = () => send({ cmd: "find_next" });
+el("findPrev").onclick = () => send({ cmd: "find_prev" });
+el("findClose").onclick = () => send({ cmd: "find_close" });
+el("findInput").addEventListener("input", () => send({ cmd: "find", text: el("findInput").value }));
+el("findInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); send({ cmd: e.shiftKey ? "find_prev" : "find_next" }); }
+  if (e.key === "Escape") { e.preventDefault(); send({ cmd: "find_close" }); }
+});
+
+window.swiftx = {
+  setState(json) {
+    try { STATE = typeof json === "string" ? JSON.parse(json) : json; } catch (e) { return; }
+    render();
+  },
+  focusUrl() { el("urlBar").focus(); },
+  openFind() { el("findbar").classList.add("open"); el("findInput").focus(); el("findInput").select(); },
+  closeFind() { el("findbar").classList.remove("open"); },
+};
+
+send({ cmd: "ready" });
+</script>
+</body>
+</html>

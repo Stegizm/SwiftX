@@ -1,0 +1,14 @@
+# Python / PyInstaller ile derlenmis orijinal surumun ciktilari (repoya dahil edilmez)
+/_internal/
+/SwiftX
+/profile/
+
+# Rust derleme ciktilari
+/rust/target/
+**/*.rs.bk
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
