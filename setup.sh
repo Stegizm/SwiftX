@@ -19,6 +19,7 @@
 #   DEFAULT_BRANCH  Varsayilan dal             (varsayilan: main)
 #   GIT_NAME        Commit yazari adi          (varsayilan: SwiftX)
 #   GIT_EMAIL       Commit yazari e-postasi    (varsayilan: swiftx@users.noreply.github.com)
+#   FORCE_TAG       Ayni etiketi zorla guncelle (varsayilan: 0)
 #
 set -euo pipefail
 
@@ -129,13 +130,22 @@ publish_with_token() {
   ok "Dal gonderildi."
 
   if git rev-parse "$TAG" >/dev/null 2>&1; then
-    warn "Etiket zaten var: $TAG"
+    if [ "${FORCE_TAG:-0}" = "1" ]; then
+      git -c user.name="$GIT_NAME" -c user.email="$GIT_EMAIL" tag -f -a "$TAG" -m "SwiftX Browser $TAG"
+      ok "Etiket guncellendi (force): $TAG"
+    else
+      warn "Etiket zaten var: $TAG (guncellemek icin FORCE_TAG=1 kullanin)"
+    fi
   else
     git -c user.name="$GIT_NAME" -c user.email="$GIT_EMAIL" tag -a "$TAG" -m "SwiftX Browser $TAG"
     ok "Etiket olusturuldu: $TAG"
   fi
   info "Etiket push ediliyor..."
-  git push "$push_url" "$TAG"
+  if [ "${FORCE_TAG:-0}" = "1" ]; then
+    git push --force "$push_url" "$TAG"
+  else
+    git push "$push_url" "$TAG"
+  fi
   ok "Etiket gonderildi -> GitHub Actions release tetiklendi."
 
   REPO_URL="https://github.com/$GITHUB_USER/$REPO_NAME"
@@ -152,11 +162,19 @@ publish_with_gh() {
     git push -u "$REMOTE" "$DEFAULT_BRANCH"
   fi
   if git rev-parse "$TAG" >/dev/null 2>&1; then
-    warn "Etiket zaten var: $TAG"
+    if [ "${FORCE_TAG:-0}" = "1" ]; then
+      git -c user.name="$GIT_NAME" -c user.email="$GIT_EMAIL" tag -f -a "$TAG" -m "SwiftX Browser $TAG"
+    else
+      warn "Etiket zaten var: $TAG (guncellemek icin FORCE_TAG=1 kullanin)"
+    fi
   else
     git -c user.name="$GIT_NAME" -c user.email="$GIT_EMAIL" tag -a "$TAG" -m "SwiftX Browser $TAG"
   fi
-  git push "$REMOTE" "$TAG"
+  if [ "${FORCE_TAG:-0}" = "1" ]; then
+    git push --force "$REMOTE" "$TAG"
+  else
+    git push "$REMOTE" "$TAG"
+  fi
   REPO_URL="$(gh repo view --json url -q .url 2>/dev/null || true)"
 }
 

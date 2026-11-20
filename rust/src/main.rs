@@ -8,6 +8,16 @@ use tao::{
 };
 
 fn main() {
+    // Teshis: yalnizca guncelleme kontrolu yapip cik.
+    if std::env::args().any(|a| a == "--check-update") {
+        match swiftx::core::updater::check() {
+            Ok(Some(i)) => println!("Yeni surum mevcut: v{} ({})", i.version, i.page_url),
+            Ok(None) => println!("Guncelleme yok (mevcut surum v{}).", constants::VERSION),
+            Err(e) => println!("Guncelleme kontrolu basarisiz: {e}"),
+        }
+        return;
+    }
+
     // wry'nin Linux arka ucu (webkit2gtk) alt-web gorunumleri icin X11 gerektirir.
     // Wayland oturumlarinda XWayland uzerinden calismasi icin X11 arka ucunu sec.
     if std::env::var_os("GDK_BACKEND").is_none() && std::env::var_os("DISPLAY").is_some() {
