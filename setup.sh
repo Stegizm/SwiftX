@@ -17,8 +17,8 @@
 #   TAG             Surum etiketi              (varsayilan: v0.3.0)
 #   REMOTE          Git remote adi             (varsayilan: origin)
 #   DEFAULT_BRANCH  Varsayilan dal             (varsayilan: main)
-#   GIT_NAME        Commit yazari adi          (varsayilan: SwiftX)
-#   GIT_EMAIL       Commit yazari e-postasi    (varsayilan: swiftx@users.noreply.github.com)
+#   GIT_NAME        Commit yazari adi          (varsayilan: Stegizm)
+#   GIT_EMAIL       Commit yazari e-postasi    (varsayilan: Stegizm@users.noreply.github.com)
 #   FORCE_TAG       Ayni etiketi zorla guncelle (varsayilan: 0)
 #
 set -euo pipefail
@@ -30,8 +30,8 @@ VISIBILITY="${VISIBILITY:-public}"
 TAG="${TAG:-v0.3.0}"
 REMOTE="${REMOTE:-origin}"
 DEFAULT_BRANCH="${DEFAULT_BRANCH:-main}"
-GIT_NAME="${GIT_NAME:-SwiftX}"
-GIT_EMAIL="${GIT_EMAIL:-swiftx@users.noreply.github.com}"
+GIT_NAME="${GIT_NAME:-Stegizm}"
+GIT_EMAIL="${GIT_EMAIL:-Stegizm@users.noreply.github.com}"
 TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
 
 info() { printf '\033[1;34m==>\033[0m %s\n' "$*"; }

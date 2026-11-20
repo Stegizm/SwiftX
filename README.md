@@ -1,128 +1,189 @@
+<div align="center">
+
 # SwiftX Browser
 
-Hizli, guvenli ve acik kaynakli web tarayicisi. Baslangicta Python + PySide6 (QtWebEngine)
-ile yazildi; **v0.3.0** ile birlikte tamamen **Rust**'a ([tao](https://crates.io/crates/tao) +
-[wry](https://crates.io/crates/wry)) tasindi.
+**Hızlı, hafif ve açık kaynaklı masaüstü web tarayıcısı.**
 
-## Ozellikler
+Rust ile yazılmıştır · [tao](https://crates.io/crates/tao) + [wry](https://crates.io/crates/wry) · Linux & Windows
 
-- **Coklu sekme** + sekme uyutma (hafiza tasarrufu) ve renkli sekmeler
-- **Navigasyon**: geri/ileri/yenile/ana sayfa, adres cubugu + arama
-- **Yer imleri**: cubuk, ekleme/kaldirma, JSON ice/disa aktarma
-- **Gecmis** (son 500 kayit) ve **indirmeler** yan panelde
-- **Reklam/izleyici engelleyici** (navigasyon + sayfa ici)
-- **Smooth Scroll**, **Auto Dark Mode**, **Sayfa icinde arama**, **Gelistirici araclari**
-- **Oturum geri yukleme**, tam ekran, izin yonetimi (kamera/mikrofon/konum/...)
-- **Eklenti sistemi**: Dark Reader, No Ads, Page Speed, Privacy Guard, Read Mode
-- **Ayar kaliciligi** (`settings.json`)
+[![Release](https://img.shields.io/github/v/release/Stegizm/SwiftX?sort=semver&color=blueviolet)](https://github.com/Stegizm/SwiftX/releases)
+[![Build](https://github.com/Stegizm/SwiftX/actions/workflows/release.yml/badge.svg)](https://github.com/Stegizm/SwiftX/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows-2ea44f.svg)](#kurulum)
 
-## Klavye Kisayollari
+</div>
 
-| Kisayol | Islev |
+---
+
+## İçindekiler
+
+- [Özellikler](#özellikler)
+- [Kurulum](#kurulum)
+- [Kullanım](#kullanım)
+- [Klavye Kısayolları](#klavye-kısayolları)
+- [Otomatik Güncelleme](#otomatik-güncelleme)
+- [Geliştirme](#geliştirme)
+- [Proje Yapısı](#proje-yapısı)
+- [Sürüm Yayınlama](#sürüm-yayınlama)
+- [Katkı](#katkı)
+- [Lisans](#lisans)
+
+## Özellikler
+
+| Kategori | Özellikler |
 | --- | --- |
-| `Ctrl+T` / `Ctrl+W` | Yeni sekme / sekmeyi kapat |
-| `Ctrl+L` | Adres cubuguna odaklan |
-| `Ctrl+D` | Yer imine ekle |
-| `Ctrl+H` / `Ctrl+J` | Gecmis / Indirmeler |
-| `Ctrl+B` | Kenar cubugu |
-| `Ctrl+R` / `F5` | Yenile |
-| `Ctrl+F` | Sayfada ara |
-| `Ctrl+S` | Yer imlerini disa aktar |
-| `Ctrl+ +/-/0` | Zoom |
-| `Alt+Sol/Sag` | Geri / Ileri |
-| `F11` / `F12` | Tam ekran / Gelistirici araclari |
+| **Sekmeler** | Çoklu sekme, sekme uyutma (hafıza tasarrufu), renkli sekmeler, orta tık ile kapatma |
+| **Gezinti** | Geri / ileri / yenile / ana sayfa, adres çubuğu ve arama birleşik girişi |
+| **İçerik** | Yer imleri çubuğu, son 500 kayıtlı geçmiş, indirme yöneticisi |
+| **Gizlilik** | URL tabanlı reklam & izleyici engelleyici, izin yönetimi (kamera, mikrofon, konum…) |
+| **Okuma** | Sayfa içinde arama, otomatik karanlık mod, yumuşak kaydırma, okuma modu |
+| **Eklentiler** | Dark Reader, No Ads, Page Speed, Privacy Guard, Read Mode |
+| **Oturum** | Oturum geri yükleme, kalıcı ayarlar (`settings.json`) |
+| **Diğer** | Tam ekran, zoom, geliştirici araçları, otomatik güncelleme |
 
-## Derleme
+## Kurulum
+
+### Hazır paketler (önerilir)
+
+[Releases](https://github.com/Stegizm/SwiftX/releases) sayfasından işletim sistemine uygun dosyayı indir:
+
+| Platform | Dosya |
+| --- | --- |
+| Linux (x86_64) | `swiftx-linux-x86_64.tar.gz` |
+| Windows (x86_64) | `swiftx-windows-x86_64.zip` |
+
+**Linux**
 
 ```bash
-cd rust
+tar -xzf swiftx-linux-x86_64.tar.gz
+cd swiftx && ./swiftx
+```
+
+**Windows**
+
+Zip dosyasını çıkar ve `swiftx.exe` dosyasını çalıştır.
+
+> Paketlerin içinde çalıştırılabilir dosya ve `resources/` klasörü (ana sayfa, görseller) bulunur.
+
+### Kaynaktan derleme
+
+```bash
+git clone https://github.com/Stegizm/SwiftX.git
+cd SwiftX/rust
 cargo build --release
 ./target/release/swiftx
 ```
 
-### Linux bagimliliklari
+**Linux bağımlılıkları**
 
-- `webkit2gtk-4.1` ve `gtk+-3.0` gelistirme paketleri
-- Debian/Ubuntu: `sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev`
-- Arch: `sudo pacman -S webkit2gtk-4.1 gtk3`
-- Fedora: `sudo dnf install webkit2gtk4.1-devel gtk3-devel`
+| Dağıtım | Komut |
+| --- | --- |
+| Debian / Ubuntu | `sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev` |
+| Arch | `sudo pacman -S webkit2gtk-4.1 gtk3` |
+| Fedora | `sudo dnf install webkit2gtk4.1-devel gtk3-devel` |
 
-> **Wayland notu:** wry'nin Linux arka ucu alt-web gorunumleri icin X11 kullanir. Uygulama
-> baslangicta `GDK_BACKEND=x11` secerek XWayland uzerinden calisir. Saf Wayland ortaminda
-> XWayland kurulu olmalidir.
+**Windows:** WebView2 Runtime gerekir (Windows 10/11'de varsayılan olarak yüklüdür).
 
-### Windows
+> **Wayland notu:** wry'nin Linux arka ucu alt-web görünümleri için X11 kullanır. Uygulama açılışta
+> `GDK_BACKEND=x11` seçerek XWayland üzerinden çalışır; saf Wayland oturumunda XWayland kurulu olmalıdır.
 
-WebView2 Runtime (Windows 10/11'de varsayilan gelir) gereklidir.
+## Kullanım
 
-## Kaynaktan dagitim
+Uygulama açıldığında ana sayfa yüklenir. Adres çubuğuna bir URL yaz (`example.com`) veya doğrudan
+arama terimi gir. Sol menüden (`☰`) ana sayfaya dön, eklentileri ya da ayarları aç. Sağ panelden
+geçmişi ve indirmeleri görüntüle.
+
+## Klavye Kısayolları
+
+| Kısayol | İşlev | Kısayol | İşlev |
+| --- | --- | --- | --- |
+| `Ctrl+T` | Yeni sekme | `Ctrl+B` | Sol menü |
+| `Ctrl+W` | Sekmeyi kapat | `Ctrl+L` | Adres çubuğuna odaklan |
+| `Ctrl+R` / `F5` | Yenile | `Ctrl+D` | Yer imine ekle |
+| `Alt+←` / `Alt+→` | Geri / ileri | `Ctrl+H` / `Ctrl+J` | Geçmiş / indirmeler |
+| `Ctrl+F` | Sayfada ara | `Ctrl+S` | Yer imlerini dışa aktar |
+| `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Yakınlaştır / uzaklaştır / sıfırla | `F11` / `F12` | Tam ekran / geliştirici araçları |
+
+## Otomatik Güncelleme
+
+SwiftX açılışta GitHub'daki en son sürümü kontrol eder. Daha yeni bir sürüm varsa bildirim gösterir;
+**Ayarlar → Güncellemeler** bölümünden yeni ikili dosyayı indirip uygulamayı yeniden başlatarak
+günceller. Kontrolü elle çalıştırmak için:
 
 ```bash
-GITHUB_TOKEN=ghp_xxxxxxxx ./setup.sh
+./swiftx --check-update
 ```
 
-Betik `gh` (GitHub CLI) gerektirmez. Bir Personal Access Token ile calisir
-(<https://github.com/settings/tokens/new?scopes=repo,workflow>, scope: `repo` + `workflow`):
-Rust'i (gerekirse) kurar, release
-derlemesini yapar, git deposunu baslatir, GitHub deposunu olusturur, push eder ve `v0.3.0`
-etiketini atarak release is akisini tetikler. Token yalnizca push aninda kullanilir ve
-`.git/config` icinde saklanmaz.
-
-`gh` kurulu ve oturum acilmissa token olmadan da calisir.
-
-Ortam degiskenleri: `GITHUB_TOKEN`, `GITHUB_USER`, `REPO_NAME`, `VISIBILITY`
-(`public`/`private`), `TAG`, `REMOTE`, `GIT_NAME`, `GIT_EMAIL`, `FORCE_TAG`.
-
-Ayni etiketi (orn. halihazirda var olan `v0.3.0`) yeni bir derlemeye tasimak icin:
+## Geliştirme
 
 ```bash
-GITHUB_TOKEN=... FORCE_TAG=1 ./setup.sh
+cd rust
+cargo build            # hata ayıklama derlemesi
+cargo run              # çalıştır
+cargo test             # testler
+cargo clippy           # statik analiz
+cargo fmt --check      # biçim denetimi
 ```
 
-## Releases
+**Ortam değişkenleri**
 
-Her `v*` etiketi push edildiginde **veya** GitHub'da bir release yayinlandiginda
-(`release: published`) GitHub Actions calisir ve:
+| Değişken | Açıklama |
+| --- | --- |
+| `SWIFTX_DATA_DIR` | Veri dizinini geçersiz kılar (ayarlar, geçmiş, önbellek) |
+| `SWIFTX_RESOURCES` | Kaynak (ana sayfa/görsel) dizinini geçersiz kılar |
+| `SWIFTX_DEBUG=1` | Ayrıntılı günlük kaydı |
+| `SWIFTX_SELFTEST=1` | Dahili arayüz self-test'ini çalıştırır |
 
-- Linux icin `swiftx-linux-x86_64.tar.gz` + ham `swiftx`
-- Windows icin `swiftx-windows-x86_64.zip` + ham `swiftx.exe`
-
-dosyalarini release'e yukler. Paketlerin icinde calistirilabilir dosya ve `resources/`
-klasoru bulunur.
-
-### Yeni surum nasil yayinlanir
-
-1. `rust/Cargo.toml` ve `rust/src/core/constants.rs` icindeki surumu guncelle (orn. `0.3.1`).
-2. `GITHUB_TOKEN=... TAG=v0.3.1 ./setup.sh` calistir (veya elle `git tag v0.3.1 && git push origin v0.3.1`).
-3. Actions, release'i ve guncel ikili dosyalari otomatik olusturur.
-
-## Otomatik Guncelleme
-
-Uygulama acilista GitHub'daki **en son release**'i kontrol eder
-(`/repos/Stegizm/SwiftX/releases/latest`). Daha yeni bir surum varsa bildirim gosterir;
-**Ayarlar > Guncellemeler** bolumunden "Yeniden baslat ve guncelle" ile yeni ikili dosya
-indirilir, uygulama kapanir, dosya degistirilir ve otomatik yeniden baslatilir.
-
-Gereksinim: yeni surumun normal (draft/prerelease olmayan) bir release olarak ve
-ilgili platformun ham ikili dosyasi (`swiftx` / `swiftx.exe`) eklenmis olmasi. Bu,
-yukaridaki release akisiyla otomatik saglanir.
-
-## Proje Yapisi
+## Proje Yapısı
 
 ```
-rust/
-  src/
-    main.rs          # giris noktasi / olay dongusu
-    app.rs           # koordinator (eski MainWindow)
-    ipc.rs           # chrome <-> Rust mesaj protokolu
-    core/            # sabitler, modeller, storage, servisler
-    engine/          # web gorunumu, reklam engelleme, scriptler
-    ui/              # gomulu chrome arayuzu (HTML/CSS/JS)
-  resources/         # ana sayfa + gorseller
-setup.sh
-.github/workflows/release.yml
+SwiftX/
+├── rust/
+│   ├── src/
+│   │   ├── main.rs        # giriş noktası / olay döngüsü
+│   │   ├── app.rs         # koordinatör (pencere, sekmeler, servisler)
+│   │   ├── ipc.rs         # arayüz <-> çekirdek mesaj protokolü
+│   │   ├── core/          # sabitler, modeller, depolama, servisler, güncelleyici
+│   │   ├── engine/        # web görünümü, reklam engelleme, enjekte scriptler
+│   │   └── ui/            # gömülü chrome arayüzü (HTML/CSS/JS)
+│   ├── resources/         # ana sayfa + görseller
+│   └── tests/             # birim / mantık testleri
+├── .github/workflows/     # release otomasyonu
+├── setup.sh               # GitHub'a yayınlama yardımcısı
+└── README.md
+```
+
+## Sürüm Yayınlama
+
+Her `v*` etiketi push edildiğinde veya GitHub'da bir release yayınlandığında GitHub Actions Linux ve
+Windows için çalıştırılabilir paketleri otomatik üretir.
+
+```bash
+# 1) Sürümü yükselt: rust/Cargo.toml ve rust/src/core/constants.rs
+# 2) Yayınla:
+GITHUB_TOKEN=ghp_xxxxxxxx TAG=v0.3.1 ./setup.sh
+```
+
+`setup.sh`, `gh` (GitHub CLI) gerektirmez; bir Personal Access Token (`repo` + `workflow` yetkili)
+ile depoyu oluşturur/push eder ve etiketi gönderir. Aynı etiketi yeniden yayınlamak için `FORCE_TAG=1`
+kullanılabilir.
+
+## Katkı
+
+Katkılar memnuniyetle karşılanır. Lütfen önce bir **issue** açarak değişikliği tartışın, ardından
+özellik dalı açıp pull request gönderin:
+
+```bash
+git checkout -b ozellik/yeni-ozellik
+cargo fmt && cargo clippy && cargo test
 ```
 
 ## Lisans
 
-MIT - bkz. [LICENSE](LICENSE).
+Bu proje **MIT** lisansı ile dağıtılmaktadır. Ayrıntı için [LICENSE](LICENSE) dosyasına bakın.
+
+---
+
+<div align="center">
+<sub>SwiftX — başlangıçta Python + QtWebEngine ile geliştirildi, <b>v0.3.0</b> ile tamamen Rust'a taşındı.</sub>
+</div>
